@@ -25,8 +25,18 @@ base_json = {
                     {
                         'label': [
                             {
-                                'name': 'cell',
+                                'name': 'nowt. Ki67-',
+                                'color': '#2212D1',
+                                'attributes': None
+                            },
+{
+                                'name': 'nowt. Ki67+',
                                 'color': '#FF002C',
+                                'attributes': None
+                            },
+{
+                                'name': 'Inne',
+                                'color': '#05694B',
                                 'attributes': None
                             }
                         ]
@@ -76,7 +86,7 @@ def execute(args):
         polygon_dicts: List[Dict] = []
         for polygon in polygons:
             new_polygon = {
-                "@label": 'cell',
+                "@label": 'nowt. Ki67-',
                 "@points": str(polygon_to_str(polygon)),
                 "@occluded": 0,
                 "@z_order": 1
