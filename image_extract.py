@@ -96,13 +96,14 @@ def get_patches_with_mask(patches):
 
 def draw_patches(patches, base_image):
     for idx, patch in enumerate(patches):
+        idx += 1
         name, image = patch
         name = '_'.join([i for i in name.split('_')][::-1])
 
         patches[idx] = (str(idx) + '_' + name, image)
         p = [int(i) * 512 for i in name.split('_')]
         cv2.rectangle(base_image, (p[0] - 10, p[1] - 10), (p[0] + 512 + 10, p[1] + 512 + 10), (0, 0, 0), 15)
-        base_image = cv2.putText(base_image, str(idx + 1), (p[0] + 512 + 30, p[1] + 512 + 30), cv2.FONT_HERSHEY_SIMPLEX,
+        base_image = cv2.putText(base_image, str(idx), (p[0] + 512 + 30, p[1] + 512 + 30), cv2.FONT_HERSHEY_SIMPLEX,
                                  25, (255, 0, 0), 25, cv2.LINE_AA)
 
     return patches, base_image
@@ -124,7 +125,7 @@ if __name__ == '__main__':
                 mask_image = get_mask(image_xml, base_image)
                 patches = split_image(mask_image, 512)
                 patches = get_patches_with_mask(patches)
-                patches = random_patches(patches, 20)
+                patches = random_patches(patches, args.number_of_images)
                 patches.sort(key=lambda x: x[0])
                 print([k[0] for k in patches])
                 patches, image_with_patches = draw_patches(patches, base_image)
@@ -138,9 +139,7 @@ if __name__ == '__main__':
                     he_image = cv2.rotate(he_image, cv2.ROTATE_180)
                     for idx, batch in enumerate(patches):
                         name, image = batch
-                        # name = '_'.join([str(int(i)*512//4+256//4) for i in name.split('_')][::-1]) # //4 for qupath
-                        # print(name2)
-                        # batches_sample[idx] = (name, image)
+
                         p = [int(i) * 512 for i in name.split('_')[1:]]
                         cv2.rectangle(he_image, (p[0] - 512, p[1] - 512), (p[0] + 512 + 512, p[1] + 512 + 512), (0, 0, 0),
                                       15)
