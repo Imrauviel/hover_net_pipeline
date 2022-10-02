@@ -1,8 +1,12 @@
 import argparse
 import cv2
+import imageio
 import numpy as np
 import os
+import random
 from PIL import Image
+from PIL import Image, ImageDraw
+from bs4 import BeautifulSoup as bs
 from tifffile import imread
 from tqdm import tqdm
 from typing import List, Tuple
@@ -18,6 +22,7 @@ parser.add_argument('-n', '--number-of-images', default=100, type=int,
                     help="Number of output images, Default: 100")
 parser.add_argument('-x', '--xml_path', default='annotations.xml',
                     help='Path to xml file with annotated region. Default: annotations.xml')
+parser.add_argument('-f', '--full_img', help='Path where save image with drawn patches', default='full_img.png')
 
 
 def split_image(image, patch_size):
@@ -69,13 +74,14 @@ def points_to_mask(points, width, height):
     return mask
 
 
-def get_mask(xml, base_image, scale_factor=8):
+def get_mask(image_xml, base_image, scale_factor=8):
     ''' do zastanowienia: czy zawsze będzie jeden rak na obrazku? '''
-    points = xml.find_one('polygon')
+    # points = xml.find_one('polygon')
+    points = image_xml.find_all('polygon')[0]
     points = str_to_list(points['points'])
-
-    width = int(xml['width'])
-    height = int(xml['height'])
+    # print(xml)
+    width = int(image_xml['width'])
+    height = int(image_xml['height'])
     mask = points_to_mask(points, width, height)
 
     dim = (mask.shape[1] * scale_factor, mask.shape[0] * scale_factor)
@@ -84,6 +90,22 @@ def get_mask(xml, base_image, scale_factor=8):
     mask_image = np.dstack((base_image, mask))
 
     return mask_image
+
+def get_patches_with_mask(patches):
+    return [(name, image[:, :, :3]) for name, image in patches.items() if image[:, :, 3].sum() > 0]
+
+def draw_patches(patches, base_image):
+    for idx, patch in enumerate(patches):
+        name, image = patch
+        name = '_'.join([i for i in name.split('_')][::-1])
+
+        patches[idx] = (str(idx) + '_' + name, image)
+        p = [int(i) * 512 for i in name.split('_')]
+        cv2.rectangle(base_image, (p[0] - 10, p[1] - 10), (p[0] + 512 + 10, p[1] + 512 + 10), (0, 0, 0), 15)
+        base_image = cv2.putText(base_image, str(idx + 1), (p[0] + 512 + 30, p[1] + 512 + 30), cv2.FONT_HERSHEY_SIMPLEX,
+                                 25, (255, 0, 0), 25, cv2.LINE_AA)
+
+    return patches, base_image
 
 
 if __name__ == '__main__':
@@ -94,21 +116,47 @@ if __name__ == '__main__':
         og_path = args.image.split('/')[-1]
         bs_content = read_xml(args.xml_path)
         base_image = imread(args.image)
-        #TODO: zrobić tak, żeby można było wybrać, który obrazek z xmla wybrać
+        # TODO: zrobić tak, żeby można było wybrać, który obrazek z xmla wybrać
         for image_xml in bs_content.find_all('image'):
             name = image_xml['name'].split('/')[-1].replace('.png', '.tif')
 
             print(name)
             if name == og_path:
-                points = image.find_one('polygon')
-                print(points)
+                mask_image = get_mask(image_xml, base_image)
+                patches = split_image(mask_image, 512)
+                patches = get_patches_with_mask(patches)
+                patches = random_patches(patches, 20)
+                patches.sort(key=lambda x: x[0])
+                print([k[0] for k in patches])
+                patches, image_with_patches = draw_patches(patches, base_image)
+
+                save_images(patches, args.out_dir)
+                imageio.imwrite(args.full_img, image_with_patches)
+
+                # FOR TESTING
+                if False:
+                    he_image = imread('/content/982-22-HE.tif')
+                    he_image = cv2.rotate(he_image, cv2.ROTATE_180)
+                    for idx, batch in enumerate(patches):
+                        name, image = batch
+                        # name = '_'.join([str(int(i)*512//4+256//4) for i in name.split('_')][::-1]) # //4 for qupath
+                        # print(name2)
+                        # batches_sample[idx] = (name, image)
+                        p = [int(i) * 512 for i in name.split('_')]
+                        cv2.rectangle(he_image, (p[0] - 512, p[1] - 512), (p[0] + 512 + 512, p[1] + 512 + 512), (0, 0, 0),
+                                      15)
+                        imageio.imwrite('/content/gdrive/MyDrive/raw/982-22-HE_copy2.jpg', he_image)
+
+                break
+
         # get_mask()
         # points = str_to_list(bs_content.find_all('points')[0].text)
         # mask = points_to_mask(points, 10000, 10000)
     else:
-        input_image = imread(args.image)
-        splitted_images = split_image(input_image, args.patch_size)
-        converted_images = convert_to_hsv(splitted_images)
-        sorted_images = sort_patches(converted_images, args.number_of_images)
-        save_images(sorted_images, args.out_dir)
-        print(f"Images saved in {args.out_dir}.")
+        print("No xml file provided")
+        # input_image = imread(args.image)
+        # splitted_images = split_image(input_image, args.patch_size)
+        # converted_images = convert_to_hsv(splitted_images)
+        # sorted_images = sort_patches(converted_images, args.number_of_images)
+        # save_images(sorted_images, args.out_dir)
+        # print(f"Images saved in {args.out_dir}.")
