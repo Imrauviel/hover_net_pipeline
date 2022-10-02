@@ -120,7 +120,6 @@ if __name__ == '__main__':
         for image_xml in bs_content.find_all('image'):
             name = image_xml['name'].split('/')[-1].replace('.png', '.tif')
 
-            print(name)
             if name == og_path:
                 mask_image = get_mask(image_xml, base_image)
                 patches = split_image(mask_image, 512)
@@ -142,10 +141,10 @@ if __name__ == '__main__':
                         # name = '_'.join([str(int(i)*512//4+256//4) for i in name.split('_')][::-1]) # //4 for qupath
                         # print(name2)
                         # batches_sample[idx] = (name, image)
-                        p = [int(i) * 512 for i in name.split('_')]
+                        p = [int(i) * 512 for i in name.split('_')[1:]]
                         cv2.rectangle(he_image, (p[0] - 512, p[1] - 512), (p[0] + 512 + 512, p[1] + 512 + 512), (0, 0, 0),
                                       15)
-                        imageio.imwrite('/content/gdrive/MyDrive/raw/982-22-HE_copy2.jpg', he_image)
+                    imageio.imwrite('/content/gdrive/MyDrive/raw/982-22-HE_copy2.jpg', he_image)
 
                 break
 
