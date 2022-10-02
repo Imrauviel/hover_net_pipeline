@@ -23,6 +23,7 @@ parser.add_argument('-n', '--number-of-images', default=100, type=int,
 parser.add_argument('-x', '--xml_path', default='annotations.xml',
                     help='Path to xml file with annotated region. Default: annotations.xml')
 parser.add_argument('-f', '--full_img', help='Path where save image with drawn patches', default='full_img.png')
+parser.add_argument('-he', '--he_file', help='Path to HE image. Tested feature.')
 
 
 def split_image(image, patch_size):
@@ -134,8 +135,8 @@ if __name__ == '__main__':
                 imageio.imwrite(args.full_img, image_with_patches)
 
                 # FOR TESTING
-                if False:
-                    he_image = imread('/content/982-22-HE.tif')
+                if args.he_file:
+                    he_image = imread(args.he_file)
                     he_image = cv2.rotate(he_image, cv2.ROTATE_180)
                     for idx, batch in enumerate(patches):
                         name, image = batch
