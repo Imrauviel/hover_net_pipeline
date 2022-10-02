@@ -96,14 +96,14 @@ def get_patches_with_mask(patches):
 
 def draw_patches(patches, base_image):
     for idx, patch in enumerate(patches):
-        idx += 1
+
         name, image = patch
         name = '_'.join([i for i in name.split('_')][::-1])
 
-        patches[idx] = (str(idx) + '_' + name, image)
+        patches[idx] = (str(idx+1) + '_' + name, image)
         p = [int(i) * 512 for i in name.split('_')]
         cv2.rectangle(base_image, (p[0] - 10, p[1] - 10), (p[0] + 512 + 10, p[1] + 512 + 10), (0, 0, 0), 15)
-        base_image = cv2.putText(base_image, str(idx), (p[0] + 512 + 30, p[1] + 512 + 30), cv2.FONT_HERSHEY_SIMPLEX,
+        base_image = cv2.putText(base_image, str(idx+1), (p[0] + 512 + 30, p[1] + 512 + 30), cv2.FONT_HERSHEY_SIMPLEX,
                                  25, (255, 0, 0), 25, cv2.LINE_AA)
 
     return patches, base_image
