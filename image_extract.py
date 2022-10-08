@@ -125,8 +125,10 @@ if __name__ == '__main__':
             if name == og_path:
                 mask_image = get_mask(image_xml, base_image)
                 patches = split_image(mask_image, 512)
+                #TODO: zapisać wszystkie zdjęcia (wszystkie czy wszystkie z maską)
                 patches = get_patches_with_mask(patches)
                 patches = random_patches(patches, args.number_of_images)
+                #TODO: zapisać kordy wybranych patch do csv
                 patches.sort(key=lambda x: x[0])
                 print([k[0] for k in patches])
                 patches, image_with_patches = draw_patches(patches, base_image)
