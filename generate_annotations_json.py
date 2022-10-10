@@ -1,5 +1,7 @@
+import argparse
 import copy
 import cv2
+import json
 import numpy as np
 import os
 import scipy.io
@@ -17,7 +19,8 @@ example = {
               "attributes": [],
               "elements": [],
               "label": "nowt. Ki67-"
-          },
+          }
+
 out = [{
     "version": 0,
     "tags": [],
@@ -25,34 +28,55 @@ out = [{
     "tracks": []
 }]
 
-parser = argparse.ArgumentParser(
-    description='Generate project json file for CVAT')
-parser.add_argument('dir_path', help='Name of the project')
-parser.add_argument('-o', '-out_path', help='Name of the project', default='task_0/project.json')
 
-if __name__ == '__main__':
+def execute(path, project):
+    """
+    Args:
+        path: path from where annotation will be loaded (should be folder with .mat files)
+        project: structure, where annotations will be saved
 
-    args = parser.parse_args()
-    files = os.listdir(args.dir_path)
+    Returns:
+        structure, with annotations in CVAT format
+
+    1. We sort files(like in CVAT)
+    2. For each lables file:
+        2.1. We load that .mat file
+        2.2. We convert it to binary mask (hovernet generets alot of different labels, but we need only one)
+        2.3. We find contours in that mask
+        2.4. For each contour:
+            2.4.1. We create list of x, y coordinates of this contour [x1, y1, x2, y2, ...]
+            2.4.2. We create copy of example
+            2.4.3. We add coordinates to copy
+            2.4.4. We add copy to output structure
+
+    """
+    files = sorted(os.listdir(arg.dir_path))
     for idx, file in enumerate(files):
-        p = os.path.join(args.dir_path, file)
-        mat_map = scipy.io.loadmat(p)
+        mat_map = scipy.io.loadmat(os.path.join(path, file))
         bin_map = mat_map['inst_map']
         bin_map[bin_map != 0] = 1
         bin_map = bin_map.astype(np.uint8)
         contours, _ = cv2.findContours(bin_map, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-        polygons = []
         for polygon in contours:
             coords = []
             for point in polygon:
-                # a = (, )
                 coords.append(point[0][0] / 1)
                 coords.append(point[0][1] / 1)
-            polygons.append(coords)
-        temp = copy.copy(example)[0]
-        temp['points'] = polygons
-        out[0]['shapes'].append(temp)
+            temp = copy.deepcopy(example)[0]
+            temp['points'] = coords
+            temp['frame'] = idx
+            project[0]['shapes'].append(temp)
+    return project
+
+
+parser = argparse.ArgumentParser(
+    description='Generate project json file for CVAT')
+parser.add_argument('dir_path', help='Name of the project')
+parser.add_argument('-o', '--out_path', help='Where save json with project', default='task_0/annotations.json')
+
+if __name__ == '__main__':
+    args = parser.parse_args()
+    out = execute(args.dir_path, out)
 
     with open(args.out_path, 'w') as f:
         json.dump(out, f, indent=2)
-    print('Done.')
