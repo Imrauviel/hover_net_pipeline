@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup as bs
 from tifffile import imread
 from tqdm import tqdm
 from typing import List, Tuple
+import json
 
 parser = argparse.ArgumentParser(
     description='Extract images from TIF image.')
@@ -23,7 +24,7 @@ parser.add_argument('-n', '--number-of-images', default=100, type=int,
 parser.add_argument('-x', '--xml_path', default='annotations.xml',
                     help='Path to xml file with annotated region. Default: annotations.xml')
 parser.add_argument('-f', '--full_img', help='Path where save image with drawn patches', default='full_img.png')
-parser.add_argument('-he', '--he_file', help='Path to HE image. Tested feature.')
+parser.add_argument('-gd', '--gdrive', help='Path to gdrive folder', default='/content/gdrive/MyDrive/inz/default')
 
 
 def split_image(image, patch_size):
@@ -37,14 +38,6 @@ def split_image(image, patch_size):
 
 def random_patches(images, number_of_images):
     return random.sample(images, number_of_images)
-
-
-# def convert_to_hsv(patches):
-#     return [(name, cv2.cvtColor(im, cv2.COLOR_BGR2HSV)) for name, im in patches.items()]
-
-#
-# def sort_patches(patches, number_of_images):
-#     return sorted(patches, key=lambda x: -x[1][:, :, 0].std())[:number_of_images]
 
 
 def save_images(images: List[Tuple[str, np.array]], dir_path):
@@ -76,11 +69,10 @@ def points_to_mask(points, width, height):
 
 
 def get_mask(image_xml, base_image, scale_factor=8):
-    ''' do zastanowienia: czy zawsze będzie jeden rak na obrazku? '''
-    # points = xml.find_one('polygon')
-    points = image_xml.find_all('polygon')[0]
-    points = str_to_list(points['points'])
-    # print(xml)
+    points = []
+    for point_cloud in image_xml.find_all('polygon'):
+        points += str_to_list(point_cloud['points'])
+    print(len(points))
     width = int(image_xml['width'])
     height = int(image_xml['height'])
     mask = points_to_mask(points, width, height)
@@ -88,23 +80,22 @@ def get_mask(image_xml, base_image, scale_factor=8):
     dim = (mask.shape[1] * scale_factor, mask.shape[0] * scale_factor)
     mask = cv2.resize(mask, dim, interpolation=cv2.INTER_AREA)
 
-    mask_image = np.dstack((base_image, mask))
+    return np.dstack((base_image, mask))
 
-    return mask_image
 
 def get_patches_with_mask(patches):
     return [(name, image[:, :, :3]) for name, image in patches.items() if image[:, :, 3].sum() > 0]
 
+
 def draw_patches(patches, base_image):
     for idx, patch in enumerate(patches):
-
         name, image = patch
         name = '_'.join([i for i in name.split('_')][::-1])
 
-        patches[idx] = (str(idx+1) + '_' + name, image)
+        patches[idx] = (str(idx + 1) + '_' + name, image)
         p = [int(i) * 512 for i in name.split('_')]
         cv2.rectangle(base_image, (p[0] - 10, p[1] - 10), (p[0] + 512 + 10, p[1] + 512 + 10), (0, 0, 0), 15)
-        base_image = cv2.putText(base_image, str(idx+1), (p[0] + 512 + 30, p[1] + 512 + 30), cv2.FONT_HERSHEY_SIMPLEX,
+        base_image = cv2.putText(base_image, str(idx + 1), (p[0] + 512 + 30, p[1] + 512 + 30), cv2.FONT_HERSHEY_SIMPLEX,
                                  25, (255, 0, 0), 25, cv2.LINE_AA)
 
     return patches, base_image
@@ -118,6 +109,7 @@ if __name__ == '__main__':
         og_path = args.image.split('/')[-1]
         bs_content = read_xml(args.xml_path)
         base_image = imread(args.image)
+        print("Base", base_image.shape)
         # TODO: zrobić tak, żeby można było wybrać, który obrazek z xmla wybrać
         for image_xml in bs_content.find_all('image'):
             name = image_xml['name'].split('/')[-1].replace('.png', '.tif')
@@ -125,28 +117,36 @@ if __name__ == '__main__':
             if name == og_path:
                 mask_image = get_mask(image_xml, base_image)
                 patches = split_image(mask_image, 512)
-                #TODO: zapisać wszystkie zdjęcia (wszystkie czy wszystkie z maską)
+                # TODO: zapisać wszystkie zdjęcia (wszystkie czy wszystkie z maską)
                 patches = get_patches_with_mask(patches)
                 patches = random_patches(patches, args.number_of_images)
-                #TODO: zapisać kordy wybranych patch do csv
+                csv_out = [k[0] for k in patches]
+                with open(args.gdrive+r'/patches.csv', 'w') as f:
+                    json.dump(csv_out, f, indent=2)
+
                 patches.sort(key=lambda x: x[0])
                 print([k[0] for k in patches])
                 patches, image_with_patches = draw_patches(patches, base_image)
 
                 save_images(patches, args.out_dir)
+                print(args.full_img, image_with_patches.shape)
+                dim = (image_with_patches.shape[1] //2, image_with_patches.shape[0] //2)
+                image_with_patches = cv2.resize(image_with_patches, dim, interpolation=cv2.INTER_AREA)
+                print(args.full_img, image_with_patches.shape)
                 imageio.imwrite(args.full_img, image_with_patches)
 
-                # FOR TESTING
-                if args.he_file:
-                    he_image = imread(args.he_file)
-                    he_image = cv2.rotate(he_image, cv2.ROTATE_180)
-                    for idx, batch in enumerate(patches):
-                        name, image = batch
-
-                        p = [int(i) * 512 for i in name.split('_')[1:]]
-                        cv2.rectangle(he_image, (p[0] - 512, p[1] - 512), (p[0] + 512 + 512, p[1] + 512 + 512), (0, 0, 0),
-                                      15)
-                    imageio.imwrite('/content/gdrive/MyDrive/raw/982-22-HE_copy2.jpg', he_image)
+                # # FOR TESTING
+                # if args.he_file:
+                #     he_image = imread(args.he_file)
+                #     he_image = cv2.rotate(he_image, cv2.ROTATE_180)
+                #     for idx, batch in enumerate(patches):
+                #         name, image = batch
+                #
+                #         p = [int(i) * 512 for i in name.split('_')[1:]]
+                #         cv2.rectangle(he_image, (p[0] - 512, p[1] - 512), (p[0] + 512 + 512, p[1] + 512 + 512),
+                #                       (0, 0, 0),
+                #                       15)
+                #     imageio.imwrite('/content/gdrive/MyDrive/raw/982-22-HE_copy2.jpg', he_image)
 
                 break
 

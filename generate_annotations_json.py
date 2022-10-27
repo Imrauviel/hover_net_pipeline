@@ -50,7 +50,7 @@ def execute(path, project):
             2.4.4. We add copy to output structure
 
     """
-    files = sorted(os.listdir(arg.dir_path))
+    files = sorted(os.listdir(args.dir_path))
     for idx, file in enumerate(files):
         mat_map = scipy.io.loadmat(os.path.join(path, file))
         bin_map = mat_map['inst_map']
@@ -62,7 +62,7 @@ def execute(path, project):
             for point in polygon:
                 coords.append(point[0][0] / 1)
                 coords.append(point[0][1] / 1)
-            temp = copy.deepcopy(example)[0]
+            temp = copy.deepcopy(example)
             temp['points'] = coords
             temp['frame'] = idx
             project[0]['shapes'].append(temp)
