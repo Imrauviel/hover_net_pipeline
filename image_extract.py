@@ -69,13 +69,15 @@ def points_to_mask(points, width, height):
 
 
 def get_mask(image_xml, base_image, scale_factor=8):
-    points = []
-    for point_cloud in image_xml.find_all('polygon'):
-        points += str_to_list(point_cloud['points'])
-    print(len(points))
+    mask = None
     width = int(image_xml['width'])
     height = int(image_xml['height'])
-    mask = points_to_mask(points, width, height)
+    for point_cloud in image_xml.find_all('polygon'):
+        points = str_to_list(point_cloud['points'])
+        if mask is None:
+            mask = points_to_mask(points, width, height)
+        else:
+            mask += points_to_mask(points, width, height)
 
     dim = (mask.shape[1] * scale_factor, mask.shape[0] * scale_factor)
     mask = cv2.resize(mask, dim, interpolation=cv2.INTER_AREA)
