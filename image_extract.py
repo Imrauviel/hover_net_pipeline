@@ -110,19 +110,20 @@ def extract_patches_from_image(project_path, output_path, number_of_patches):
     xml_path = os.path.join(project_path, 'annotations.xml')
     og_path = base_image_path.split('/')[-1]
     JPGS_path = os.path.join(project_path, 'JPGS')
-    image_with_patches_path = os.path.join(JPGS_path, og_path.replace('.tif', '.png'))
+    image_with_patches_path = os.path.join(JPGS_path, og_path.replace('.tif', '.jpg'))
     csv_path = os.path.join(project_path, 'patches.csv')
 
     os.makedirs(JPGS_path, exist_ok=True)
 
     bs_content = read_xml(xml_path)
-    base_image = imread(base_image_path, key=3)
+    # base_image = imread(base_image_path, key=3)
 
-    print("Base", base_image.shape)
     for image_xml in bs_content.find_all('image'):
         name = image_xml['name'].split('/')[-1].replace('.png', '.tif')
-        print(name)
+
         if name == og_path:
+            base_image = imread(base_image_path, key=3)
+            print("Base", base_image.shape)
             mask_image = get_mask(image_xml, base_image)
             patches = split_image(mask_image, 512)
             patches = get_patches_with_mask(patches)
@@ -139,6 +140,15 @@ def extract_patches_from_image(project_path, output_path, number_of_patches):
             image_with_patches = cv2.resize(image_with_patches, dim, interpolation=cv2.INTER_AREA)
             print(image_with_patches_path, image_with_patches.shape)
             imageio.imwrite(image_with_patches_path, image_with_patches)
+        else:
+            image_path = os.path.join(raw_folder, name)
+            output_image_path = os.path.join(JPGS_path, name.replace('.tif', '.jpg'))
+            print(image_path)
+            base_image = imread(image_path, key=3)
+            print("Base", base_image.shape)
+            dim = (base_image.shape[1] // 2, base_image.shape[0] // 2)
+            base_image = cv2.resize(base_image, dim, interpolation=cv2.INTER_AREA)
+            imageio.imwrite(output_image_path, base_image)
 
 if __name__ == '__main__':
     args = parser.parse_args()
