@@ -1,6 +1,7 @@
 import argparse
 import cv2
 import imageio
+import json
 import numpy as np
 import os
 import random
@@ -10,7 +11,6 @@ from bs4 import BeautifulSoup as bs
 from tifffile import imread
 from tqdm import tqdm
 from typing import List, Tuple
-import json
 
 parser = argparse.ArgumentParser(
     description='Extract images from TIF image.')
@@ -103,6 +103,43 @@ def draw_patches(patches, base_image):
     return patches, base_image
 
 
+def extract_patches_from_image(project_path, output_path, number_of_patches):
+    raw_folder = os.path.join(project_path, 'raw')
+    files = os.listdir(raw_folder)
+    base_image_path = [os.path.join(raw_folder, f) for f in files if 'Ki67' in f][0]
+    xml_path = os.path.join(project_path, 'annotations.xml')
+    og_path = base_image_path.split('/')[-1]
+    JPGS_path = os.path.join(project_path, 'JPGS')
+    image_with_patches_path = os.path.join(JPGS_path, og_path.replace('.tif', '.png'))
+    csv_path = os.path.join(project_path, 'patches.csv')
+
+    os.makedirs(JPGS_path, exist_ok=True)
+
+    bs_content = read_xml(xml_path)
+    base_image = imread(base_image_path, key=3)
+
+    print("Base", base_image.shape)
+    for image_xml in bs_content.find_all('image'):
+        name = image_xml['name'].split('/')[-1].replace('.png', '.tif')
+        print(name)
+        if name == og_path:
+            mask_image = get_mask(image_xml, base_image)
+            patches = split_image(mask_image, 512)
+            patches = get_patches_with_mask(patches)
+            patches = random_patches(patches, number_of_patches)
+            csv_out = [k[0] for k in patches]
+            with open(csv_path, 'w') as f:
+                json.dump(csv_out, f, indent=2)
+
+            patches.sort(key=lambda x: x[0])
+            patches, image_with_patches = draw_patches(patches, base_image)
+            save_images(patches, output_path)
+            # print(args.full_img, image_with_patches.shape)
+            dim = (image_with_patches.shape[1] // 2, image_with_patches.shape[0] // 2)
+            image_with_patches = cv2.resize(image_with_patches, dim, interpolation=cv2.INTER_AREA)
+            print(image_with_patches_path, image_with_patches.shape)
+            imageio.imwrite(image_with_patches_path, image_with_patches)
+
 if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
@@ -123,7 +160,7 @@ if __name__ == '__main__':
                 patches = get_patches_with_mask(patches)
                 patches = random_patches(patches, args.number_of_images)
                 csv_out = [k[0] for k in patches]
-                with open(args.gdrive+r'/patches.csv', 'w') as f:
+                with open(args.gdrive + r'/patches.csv', 'w') as f:
                     json.dump(csv_out, f, indent=2)
 
                 patches.sort(key=lambda x: x[0])
@@ -132,7 +169,7 @@ if __name__ == '__main__':
 
                 save_images(patches, args.out_dir)
                 print(args.full_img, image_with_patches.shape)
-                dim = (image_with_patches.shape[1] //2, image_with_patches.shape[0] //2)
+                dim = (image_with_patches.shape[1] // 2, image_with_patches.shape[0] // 2)
                 image_with_patches = cv2.resize(image_with_patches, dim, interpolation=cv2.INTER_AREA)
                 print(args.full_img, image_with_patches.shape)
                 imageio.imwrite(args.full_img, image_with_patches)
