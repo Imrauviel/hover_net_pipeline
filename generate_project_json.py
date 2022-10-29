@@ -88,6 +88,18 @@ parser.add_argument('-t', '--task_path', help='path to task.json', default='back
 parser.add_argument('-i', '--experiment_id',
                     help='Id of experiment. Usefully if we have a lot of experiments from same image. ', default='0')
 
+
+def generete_project(project_path, task_path):
+    global project
+    project['name'] = args.name + '_' + args.experiment_id
+
+    with open(args.project_path, 'w') as f:
+        json.dump(project, f)
+
+    with open(args.task_path, 'w') as f:
+        json.dump(task, f)
+
+
 if __name__ == '__main__':
     args = parser.parse_args()
     project['name'] = args.name + '_' + args.experiment_id

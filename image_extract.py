@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup as bs
 from tifffile import imread
 from tqdm import tqdm
 from typing import List, Tuple
+from openslide import open_slide
 
 parser = argparse.ArgumentParser(
     description='Extract images from TIF image.')
@@ -43,7 +44,7 @@ def random_patches(images, number_of_images):
 def save_images(images: List[Tuple[str, np.array]], dir_path):
     for name, image in tqdm(images):
         # image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)
-        image = Image.fromarray(image)
+        # image = Image.fromarray(image)
         image.save(os.path.join(dir_path, name + '.png'))
 
 
@@ -68,7 +69,7 @@ def points_to_mask(points, width, height):
     return mask
 
 
-def get_mask(image_xml, base_image, scale_factor=8):
+def get_mask(image_xml, scale_factor=16):
     mask = None
     width = int(image_xml['width'])
     height = int(image_xml['height'])
@@ -82,22 +83,35 @@ def get_mask(image_xml, base_image, scale_factor=8):
     dim = (mask.shape[1] * scale_factor, mask.shape[0] * scale_factor)
     mask = cv2.resize(mask, dim, interpolation=cv2.INTER_AREA)
 
-    return np.dstack((base_image, mask))
+    return mask
 
 
 def get_patches_with_mask(patches):
-    return [(name, image[:, :, :3]) for name, image in patches.items() if image[:, :, 3].sum() > 0]
+    return [(name, image) for name, image in patches.items() if image.sum() > 0]
 
 
-def draw_patches(patches, base_image):
+def get_true_patches(patches, slide):
+    images = []
+    for name, image in patches:
+        # print(name, patches)
+        temp_name = '_'.join([i for i in name.split('_')][::-1])
+        p = [int(i) * 512 for i in temp_name.split('_')]
+        smaller_region = slide.read_region((p[0], p[1]), 0, (512, 512))
+        images.append((name, smaller_region))
+    return images
+
+
+def draw_patches(patches, base_image_path):
+    base_image = imread(base_image_path, key=4)
+    print(base_image.shape)
     for idx, patch in enumerate(patches):
         name, image = patch
         name = '_'.join([i for i in name.split('_')][::-1])
 
         patches[idx] = (str(idx + 1) + '_' + name, image)
-        p = [int(i) * 512 for i in name.split('_')]
-        cv2.rectangle(base_image, (p[0] - 10, p[1] - 10), (p[0] + 512 + 10, p[1] + 512 + 10), (0, 0, 0), 15)
-        base_image = cv2.putText(base_image, str(idx + 1), (p[0] + 512 + 30, p[1] + 512 + 30), cv2.FONT_HERSHEY_SIMPLEX,
+        p = [int(i) * 128 for i in name.split('_')]
+        cv2.rectangle(base_image, (p[0] - 10, p[1] - 10), (p[0] + 128 + 10, p[1] + 128 + 10), (0, 0, 0), 15)
+        base_image = cv2.putText(base_image, str(idx + 1), (p[0] + 128 + 30, p[1] + 128 + 30), cv2.FONT_HERSHEY_SIMPLEX,
                                  25, (255, 0, 0), 25, cv2.LINE_AA)
 
     return patches, base_image
@@ -116,38 +130,45 @@ def extract_patches_from_image(project_path, output_path, number_of_patches):
     os.makedirs(JPGS_path, exist_ok=True)
 
     bs_content = read_xml(xml_path)
-    # base_image = imread(base_image_path, key=3)
 
     for image_xml in bs_content.find_all('image'):
         name = image_xml['name'].split('/')[-1].replace('.png', '.tif')
 
         if name == og_path:
-            base_image = imread(base_image_path, key=3)
-            print("Base", base_image.shape)
-            mask_image = get_mask(image_xml, base_image)
-            patches = split_image(mask_image, 512)
+
+            mask = get_mask(image_xml)
+            print(mask.shape)
+            patches = split_image(mask, 512)
             patches = get_patches_with_mask(patches)
+
             patches = random_patches(patches, number_of_patches)
             csv_out = [k[0] for k in patches]
             with open(csv_path, 'w') as f:
                 json.dump(csv_out, f, indent=2)
 
             patches.sort(key=lambda x: x[0])
-            patches, image_with_patches = draw_patches(patches, base_image)
+
+            slide = open_slide(base_image_path)
+            patches = get_true_patches(patches, slide)
+            # print(patches)
+
+            patches, image_with_patches = draw_patches(patches, base_image_path)
             save_images(patches, output_path)
             # print(args.full_img, image_with_patches.shape)
-            dim = (image_with_patches.shape[1] // 2, image_with_patches.shape[0] // 2)
-            image_with_patches = cv2.resize(image_with_patches, dim, interpolation=cv2.INTER_AREA)
-            print(image_with_patches_path, image_with_patches.shape)
+            # dim = (image_with_patches.shape[1] // 2, image_with_patches.shape[0] // 2)
+            # image_with_patches = cv2.resize(image_with_patches, dim, interpolation=cv2.INTER_AREA)
+            # print(image_with_patches_path, image_with_patches.shape)
             imageio.imwrite(image_with_patches_path, image_with_patches)
         else:
+            # print('else')
             image_path = os.path.join(raw_folder, name)
             output_image_path = os.path.join(JPGS_path, name.replace('.tif', '.jpg'))
-            print(image_path)
-            base_image = imread(image_path, key=3)
-            print("Base", base_image.shape)
-            dim = (base_image.shape[1] // 2, base_image.shape[0] // 2)
-            base_image = cv2.resize(base_image, dim, interpolation=cv2.INTER_AREA)
+            # print(image_path)
+            base_image = imread(image_path, key=4)
+            # print("Base", base_image.shape)
+            # dim = (base_image.shape[1] // 2, base_image.shape[0] // 2)
+            # base_image = cv2.resize(base_image, dim, interpolation=cv2.INTER_AREA)
+            print(output_image_path, base_image.shape)
             imageio.imwrite(output_image_path, base_image)
 
 if __name__ == '__main__':

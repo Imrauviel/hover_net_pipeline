@@ -74,6 +74,15 @@ parser = argparse.ArgumentParser(
 parser.add_argument('dir_path', help='Name of the project')
 parser.add_argument('-o', '--out_path', help='Where save json with project', default='task_0/annotations.json')
 
+
+def generate(dir_path, out_path):
+    global out
+    out = execute(dir_path, out)
+
+    with open(out_path, 'w') as f:
+        json.dump(out, f, indent=2)
+
+
 if __name__ == '__main__':
     args = parser.parse_args()
     out = execute(args.dir_path, out)
